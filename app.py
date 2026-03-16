@@ -190,7 +190,7 @@ def extract_page_signals(html):
 def run_gemini_audit(gtm_script, page_signals, url, gtm_id, api_key):
     """Send GTM data to Gemini for analysis."""
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
     prompt = f"""You are an expert GTM and GA4 implementation auditor. Analyze the GTM container and page signals below for {url} (Container: {gtm_id}).
 
