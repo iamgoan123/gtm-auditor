@@ -14,14 +14,16 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
-html, body, [class*="css"] {
+html, body, [class*="css"], .stApp, .stApp > div, div[data-testid="stAppViewContainer"], div[data-testid="stAppViewBlockContainer"], div[data-testid="block-container"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
-    color: #1d1d1f;
-    background-color: #f5f5f7;
+    color: #1d1d1f !important;
+    background-color: #f5f5f7 !important;
 }
-.main { background-color: #f5f5f7 !important; }
-.block-container { padding: 2rem 2rem 4rem; max-width: 980px; background: #f5f5f7; }
+.main, .stApp { background-color: #f5f5f7 !important; }
+div[data-testid="stAppViewContainer"] { background-color: #f5f5f7 !important; }
+div[data-testid="stVerticalBlock"] { background-color: #f5f5f7 !important; }
+.block-container { padding: 2rem 2rem 4rem; max-width: 980px; background: #f5f5f7 !important; }
 section[data-testid="stSidebar"] { background: #fff !important; border-right: 1px solid rgba(0,0,0,0.06); }
 section[data-testid="stSidebar"] * { color: #1d1d1f !important; }
 
@@ -128,8 +130,69 @@ def fetch_gtm_script(gtm_id):
     url = f"https://www.googletagmanager.com/gtm.js?id={gtm_id}"
     try:
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
-        return r.text[:20000]
+        return r.text
     except:
+        return None
+
+def parse_gtm_container(script):
+    """Extract real tags, triggers and variables from GTM container JSON blob."""
+    if not script:
+        return None
+    try:
+        # GTM embeds container data as a JSON object inside the script
+        match = re.search(r'var data\s*=\s*(\{.*?"resource".*?\})\s*;?\s*\n', script, re.DOTALL)
+        if not match:
+            match = re.search(r'"resource"\s*:\s*(\{.*?\})\s*,\s*"', script, re.DOTALL)
+        if not match:
+            # Try broader pattern
+            match = re.search(r'(\{"resource":\{"version":.*?"rules":\[.*?\]\}\})', script, re.DOTALL)
+        if not match:
+            return None
+
+        raw = match.group(1)
+        # Sometimes it's wrapped in data = {...}
+        if raw.startswith('{') and '"resource"' in raw:
+            data = json.loads(raw)
+            resource = data.get('resource', data)
+        else:
+            resource = json.loads(raw)
+
+        tags = []
+        for t in resource.get('tags', []):
+            tags.append({
+                'name': t.get('function', 'Unknown'),
+                'display_name': t.get('function', '').replace('__', '').replace('_', ' ').title(),
+                'instance_name': t.get('instance_name', ''),
+                'paused': t.get('paused', False),
+                'once_per_event': t.get('once_per_event', False),
+                'once_per_load': t.get('once_per_load', False),
+                'params': {p.get('key',''):p.get('value','') for p in t.get('vtp', []) if isinstance(p, dict)}
+            })
+
+        triggers = []
+        for p in resource.get('predicates', []):
+            triggers.append({
+                'type': p.get('function', 'Unknown'),
+                'arg0': p.get('arg0', ''),
+                'arg1': p.get('arg1', ''),
+            })
+
+        variables = []
+        for v in resource.get('macros', []):
+            variables.append({
+                'name': v.get('function', 'Unknown'),
+                'instance_name': v.get('instance_name', ''),
+                'params': {p.get('key',''):p.get('value','') for p in v.get('vtp', []) if isinstance(p, dict)}
+            })
+
+        return {
+            'tags': tags,
+            'triggers': triggers,
+            'variables': variables,
+            'version': resource.get('version', 'unknown'),
+            'container_id': resource.get('container_id', '')
+        }
+    except Exception as e:
         return None
 
 def extract_page_signals(html):
@@ -167,15 +230,18 @@ def run_groq_audit(gtm_script, page_signals, url, gtm_id, api_key):
     client = Groq(api_key=api_key)
     prompt = f"""You are an expert GTM and GA4 implementation auditor. Analyze the GTM container and page signals below for {url} (Container: {gtm_id}).
 
-GTM CONTAINER SCRIPT (first 15000 chars):
-{gtm_script[:15000] if gtm_script else 'Could not fetch GTM script'}
+{real_data_section}
 
 PAGE SIGNALS:
 GA4 IDs found: {page_signals.get('ga4_ids', [])}
 GTM calls: {page_signals.get('gtag_calls', [])}
 Consent mode detected: {page_signals.get('consent_mode', False)}
 Script srcs: {page_signals.get('script_srcs', [])[:20]}
-DataLayer pushes: {page_signals.get('datalayer_pushes', [])}
+
+GTM SCRIPT SNIPPET:
+{gtm_script[:8000] if gtm_script else 'Could not fetch'}
+
+IMPORTANT: Use the REAL tag and variable names from the parsed container data above. Do not make up names.
 
 Return ONLY a valid JSON object, no markdown, no backticks:
 
@@ -240,8 +306,12 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-        api_key = st.text_input("Groq API Key", type="password", placeholder="gsk_...", help="Free at console.groq.com")
-        st.markdown('<div style="font-size:11px;color:#86868b;margin-top:2px">Free key at <a href="https://console.groq.com" target="_blank" style="color:#0071e3">console.groq.com</a></div>', unsafe_allow_html=True)
+        saved_key = st.secrets.get("GROQ_API_KEY", "") if hasattr(st, "secrets") else ""
+        api_key = saved_key or st.text_input("Groq API Key", type="password", placeholder="gsk_...", help="Free at console.groq.com")
+        if saved_key:
+            st.markdown('<div style="font-size:11px;color:#34c759;margin-top:2px">✓ API key loaded from secrets</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div style="font-size:11px;color:#86868b;margin-top:2px">Free key at <a href="https://console.groq.com" target="_blank" style="color:#0071e3">console.groq.com</a></div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("""
@@ -270,27 +340,6 @@ def main():
         </div>
         <div style="font-size:17px;color:#6e6e73;font-weight:300;letter-spacing:-.01em;max-width:520px;margin:0 auto;line-height:1.6">
             Paste any website URL and get a full Google Tag Manager audit in seconds. No GTM access needed.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── What is GTM explainer ──
-    st.markdown("""
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:28px">
-        <div class="info-card">
-            <div style="font-size:24px;margin-bottom:10px">🏷️</div>
-            <h3>What is GTM?</h3>
-            <p>Google Tag Manager is a free tool that lets businesses add and manage tracking codes on their website without touching the source code. It controls everything from GA4 to Facebook Pixel to conversion tracking.</p>
-        </div>
-        <div class="info-card">
-            <div style="font-size:24px;margin-bottom:10px">🔍</div>
-            <h3>How this tool works</h3>
-            <p>Paste any website URL and this tool fetches the real page source, detects the GTM container ID, pulls all tags and triggers, then uses AI to audit the entire setup and flag issues with recommendations.</p>
-        </div>
-        <div class="info-card">
-            <div style="font-size:24px;margin-bottom:10px">💡</div>
-            <h3>Who is this for?</h3>
-            <p>Digital marketers, analytics consultants, and agency teams who want to quickly check a client or competitor site's tracking setup without needing access to their GTM account.</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -353,9 +402,21 @@ def main():
 
         with st.spinner(f"Fetching GTM container {gtm_id}..."):
             gtm_script = fetch_gtm_script(gtm_id)
+            parsed = parse_gtm_container(gtm_script)
+
+        # Show parsed container summary
+        if parsed:
+            st.markdown(f"""
+            <div style="background:#f0f6ff;border-radius:12px;padding:12px 18px;margin-bottom:12px;display:flex;gap:20px;font-size:12px;color:#0071e3;font-weight:400">
+                <span>✓ Container parsed</span>
+                <span>{len(parsed.get('tags',[]))} real tags found</span>
+                <span>{len(parsed.get('variables',[]))} variables found</span>
+                <span>Version {parsed.get('version','?')}</span>
+            </div>
+            """, unsafe_allow_html=True)
 
         with st.spinner("Running AI audit..."):
-            audit = run_groq_audit(gtm_script, signals, url, gtm_id, api_key)
+            audit = run_groq_audit(gtm_script, signals, url, gtm_id, api_key, parsed)
 
         if not audit:
             st.error("Audit failed. Please try again.")
@@ -441,6 +502,28 @@ def main():
             st.markdown('<div class="section-card">' + ''.join([f'<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05);font-size:13px;color:#3d3d3f;font-weight:300"><span style="color:#34c759;flex-shrink:0">✓</span> {w}</div>' for w in audit['quick_wins']]) + '</div>', unsafe_allow_html=True)
 
         st.markdown(f'<div style="text-align:center;padding:32px 0 8px;font-size:11px;color:#b0b0b5">GTM Auditor — {domain} — Powered by Groq</div>', unsafe_allow_html=True)
+
+    # ── What is GTM explainer (bottom) ──
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px">
+        <div class="info-card">
+            <div style="font-size:24px;margin-bottom:10px">🏷️</div>
+            <h3>What is GTM?</h3>
+            <p>Google Tag Manager is a free tool that lets businesses add and manage tracking codes on their website without touching the source code. It controls everything from GA4 to Facebook Pixel to conversion tracking.</p>
+        </div>
+        <div class="info-card">
+            <div style="font-size:24px;margin-bottom:10px">🔍</div>
+            <h3>How this tool works</h3>
+            <p>Paste any website URL and this tool fetches the real page source, detects the GTM container ID, pulls all tags and triggers, then uses AI to audit the entire setup and flag issues with recommendations.</p>
+        </div>
+        <div class="info-card">
+            <div style="font-size:24px;margin-bottom:10px">💡</div>
+            <h3>Who is this for?</h3>
+            <p>Digital marketers, analytics consultants, and agency teams who want to quickly check a client or competitor site's tracking setup without needing access to their GTM account.</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
