@@ -226,7 +226,7 @@ def detect_tracking_method(html, signals):
         methods.append('Klaviyo tracking')
     return methods
 
-def run_groq_audit(gtm_script, page_signals, url, gtm_id, api_key):
+def run_groq_audit(gtm_script, page_signals, url, gtm_id, api_key, parsed_container=None):
     client = Groq(api_key=api_key)
     prompt = f"""You are an expert GTM and GA4 implementation auditor. Analyze the GTM container and page signals below for {url} (Container: {gtm_id}).
 
