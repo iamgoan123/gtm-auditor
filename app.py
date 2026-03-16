@@ -4,53 +4,30 @@ import re
 import json
 from groq import Groq
 
-st.set_page_config(
-    page_title="GTM Auditor",
-    page_icon="🔍",
-    layout="wide"
-)
+st.set_page_config(page_title="GTM Auditor", page_icon="🔍", layout="wide")
 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-
-html, body, [class*="css"], .stApp, .stApp > div, div[data-testid="stAppViewContainer"], div[data-testid="stAppViewBlockContainer"], div[data-testid="block-container"] {
+html, body, [class*="css"], .stApp, .stApp > div,
+div[data-testid="stAppViewContainer"], div[data-testid="stAppViewBlockContainer"],
+div[data-testid="block-container"], div[data-testid="stVerticalBlock"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     color: #1d1d1f !important;
     background-color: #f5f5f7 !important;
 }
 .main, .stApp { background-color: #f5f5f7 !important; }
-div[data-testid="stAppViewContainer"] { background-color: #f5f5f7 !important; }
-div[data-testid="stVerticalBlock"] { background-color: #f5f5f7 !important; }
 .block-container { padding: 2rem 2rem 4rem; max-width: 980px; background: #f5f5f7 !important; }
 section[data-testid="stSidebar"] { background: #fff !important; border-right: 1px solid rgba(0,0,0,0.06); }
 section[data-testid="stSidebar"] * { color: #1d1d1f !important; }
-
-h1,h2,h3,p,label,div { color: #1d1d1f; }
 h1 { font-size: 2.2rem !important; font-weight: 600 !important; letter-spacing: -.03em !important; }
 h2 { font-size: 1.3rem !important; font-weight: 600 !important; letter-spacing: -.02em !important; }
 h3 { font-size: 1rem !important; font-weight: 500 !important; }
-
-.metric-card {
-    background: #fff;
-    border-radius: 16px;
-    padding: 20px 24px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    text-align: center;
-    margin-bottom: 8px;
-}
+.metric-card { background: #fff; border-radius: 16px; padding: 20px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); text-align: center; margin-bottom: 8px; }
 .metric-num { font-size: 2rem; font-weight: 600; letter-spacing: -.03em; }
 .metric-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #86868b; margin-top: 2px; font-weight: 500; }
-
-.tag-card {
-    background: #fff;
-    border-radius: 14px;
-    padding: 16px 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    margin-bottom: 10px;
-    border-left: 4px solid #e0e0e0;
-}
+.tag-card { background: #fff; border-radius: 14px; padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 10px; border-left: 4px solid #e0e0e0; }
 .tag-card.pass { border-left-color: #34c759; }
 .tag-card.warn { border-left-color: #ff9f0a; }
 .tag-card.fail { border-left-color: #ff3b30; }
@@ -58,54 +35,26 @@ h3 { font-size: 1rem !important; font-weight: 500 !important; }
 .tag-name { font-size: 14px; font-weight: 500; color: #1d1d1f; letter-spacing: -.01em; }
 .tag-detail { font-size: 12px; color: #6e6e73; margin-top: 4px; font-weight: 300; line-height: 1.5; }
 .tag-rec { font-size: 12px; color: #ff9f0a; margin-top: 4px; font-style: italic; }
-
 .badge { display: inline-block; padding: 3px 10px; border-radius: 980px; font-size: 10px; font-weight: 500; letter-spacing: .02em; margin-left: 8px; }
 .badge-pass { background: #f0fdf4; color: #248a3d; }
 .badge-warn { background: #fff8ec; color: #b25000; }
 .badge-fail { background: #fff2f2; color: #ff3b30; }
 .badge-info { background: #e8f1fd; color: #0071e3; }
-
 .site-header { background: #fff; border-radius: 18px; padding: 22px 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 20px; }
 .gtm-id { font-family: monospace; background: #f5f5f7; padding: 3px 8px; border-radius: 6px; font-size: 13px; color: #0071e3; font-weight: 500; }
 .section-card { background: #fff; border-radius: 16px; padding: 20px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 16px; }
-
 .info-card { background: #fff; border-radius: 18px; padding: 28px 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 16px; }
 .info-card h3 { font-size: 17px !important; font-weight: 600 !important; color: #1d1d1f !important; margin-bottom: 8px; letter-spacing: -.02em; }
 .info-card p { font-size: 14px; color: #6e6e73; font-weight: 300; line-height: 1.7; margin: 0; }
-.feature-row { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
-.feature-pill { background: #f5f5f7; border-radius: 980px; padding: 8px 16px; font-size: 13px; color: #1d1d1f; font-weight: 400; display: flex; align-items: center; gap: 6px; }
-.feature-pill span { color: #0071e3; font-size: 14px; }
-
-.stButton > button {
-    background: #0071e3 !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 980px !important;
-    padding: 12px 28px !important;
-    font-size: 15px !important;
-    font-weight: 400 !important;
-    font-family: Inter, sans-serif !important;
-    letter-spacing: -.01em !important;
-    width: 100%;
-}
+.stButton > button { background: #0071e3 !important; color: white !important; border: none !important; border-radius: 980px !important; padding: 12px 28px !important; font-size: 15px !important; font-weight: 400 !important; font-family: Inter, sans-serif !important; letter-spacing: -.01em !important; width: 100%; }
 .stButton > button:hover { background: #0077ed !important; }
-.stTextInput > div > div > input {
-    border-radius: 12px !important;
-    border: 1px solid rgba(0,0,0,0.12) !important;
-    padding: 12px 16px !important;
-    font-size: 15px !important;
-    font-family: Inter, sans-serif !important;
-    font-weight: 300 !important;
-    background: #fff !important;
-    color: #1d1d1f !important;
-}
+.stTextInput > div > div > input { border-radius: 12px !important; border: 1px solid rgba(0,0,0,0.12) !important; padding: 12px 16px !important; font-size: 15px !important; font-family: Inter, sans-serif !important; font-weight: 300 !important; background: #fff !important; color: #1d1d1f !important; }
 .stTextInput > div > div > input:focus { border-color: #0071e3 !important; box-shadow: none !important; }
-.stTextInput label { color: #1d1d1f !important; }
-.stMarkdown p { color: #1d1d1f; }
-div[data-testid="stSpinner"] { color: #0071e3 !important; }
 </style>
 """, unsafe_allow_html=True)
 
+
+# ── Helpers ──────────────────────────────────────────────────
 
 def fetch_page(url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"}
@@ -135,28 +84,22 @@ def fetch_gtm_script(gtm_id):
         return None
 
 def parse_gtm_container(script):
-    """Extract real tags, triggers and variables from GTM container JSON blob."""
     if not script:
         return None
     try:
-        # GTM embeds container data as a JSON object inside the script
         match = re.search(r'var data\s*=\s*(\{.*?"resource".*?\})\s*;?\s*\n', script, re.DOTALL)
         if not match:
             match = re.search(r'"resource"\s*:\s*(\{.*?\})\s*,\s*"', script, re.DOTALL)
         if not match:
-            # Try broader pattern
             match = re.search(r'(\{"resource":\{"version":.*?"rules":\[.*?\]\}\})', script, re.DOTALL)
         if not match:
             return None
-
         raw = match.group(1)
-        # Sometimes it's wrapped in data = {...}
         if raw.startswith('{') and '"resource"' in raw:
             data = json.loads(raw)
             resource = data.get('resource', data)
         else:
             resource = json.loads(raw)
-
         tags = []
         for t in resource.get('tags', []):
             tags.append({
@@ -164,70 +107,67 @@ def parse_gtm_container(script):
                 'display_name': t.get('function', '').replace('__', '').replace('_', ' ').title(),
                 'instance_name': t.get('instance_name', ''),
                 'paused': t.get('paused', False),
-                'once_per_event': t.get('once_per_event', False),
-                'once_per_load': t.get('once_per_load', False),
-                'params': {p.get('key',''):p.get('value','') for p in t.get('vtp', []) if isinstance(p, dict)}
+                'params': {p.get('key', ''): p.get('value', '') for p in t.get('vtp', []) if isinstance(p, dict)}
             })
-
         triggers = []
         for p in resource.get('predicates', []):
-            triggers.append({
-                'type': p.get('function', 'Unknown'),
-                'arg0': p.get('arg0', ''),
-                'arg1': p.get('arg1', ''),
-            })
-
+            triggers.append({'type': p.get('function', 'Unknown'), 'arg0': p.get('arg0', ''), 'arg1': p.get('arg1', '')})
         variables = []
         for v in resource.get('macros', []):
             variables.append({
                 'name': v.get('function', 'Unknown'),
                 'instance_name': v.get('instance_name', ''),
-                'params': {p.get('key',''):p.get('value','') for p in v.get('vtp', []) if isinstance(p, dict)}
+                'params': {p.get('key', ''): p.get('value', '') for p in v.get('vtp', []) if isinstance(p, dict)}
             })
-
-        return {
-            'tags': tags,
-            'triggers': triggers,
-            'variables': variables,
-            'version': resource.get('version', 'unknown'),
-            'container_id': resource.get('container_id', '')
-        }
-    except Exception as e:
+        return {'tags': tags, 'triggers': triggers, 'variables': variables, 'version': resource.get('version', 'unknown')}
+    except:
         return None
 
 def extract_page_signals(html):
     signals = {}
-    ga4_ids = re.findall(r'G-[A-Z0-9]{8,12}', html)
-    signals['ga4_ids'] = list(set(ga4_ids))
-    dl_pushes = re.findall(r'dataLayer\.push\(\{[^}]{0,300}\}\)', html)
-    signals['datalayer_pushes'] = dl_pushes[:10]
-    gtag_calls = re.findall(r"gtag\([^)]{0,150}\)", html)
-    signals['gtag_calls'] = list(set(gtag_calls))[:10]
+    signals['ga4_ids'] = list(set(re.findall(r'G-[A-Z0-9]{8,12}', html)))
+    signals['datalayer_pushes'] = re.findall(r'dataLayer\.push\(\{[^}]{0,300}\}\)', html)[:10]
+    signals['gtag_calls'] = list(set(re.findall(r"gtag\([^)]{0,150}\)", html)))[:10]
     signals['consent_mode'] = bool(re.search(r'consent_mode|gtag.*consent', html, re.I))
-    srcs = re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', html)
-    signals['script_srcs'] = list(set(srcs))[:40]
-    shopify = bool(re.search(r'cdn\.shopify\.com|Shopify\.theme|shopify_pay', html, re.I))
-    signals['shopify_detected'] = shopify
-    ga_direct = bool(re.search(r'gtag\(.*G-[A-Z0-9]{8,12}', html))
-    signals['ga_direct'] = ga_direct
+    signals['script_srcs'] = list(set(re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', html)))[:40]
+    signals['shopify_detected'] = bool(re.search(r'cdn\.shopify\.com|Shopify\.theme|shopify_pay', html, re.I))
+    signals['ga_direct'] = bool(re.search(r'gtag\(.*G-[A-Z0-9]{8,12}', html))
     signals['has_pixel'] = bool(re.search(r'connect\.facebook\.net|fbq\(', html))
     signals['has_klaviyo'] = bool(re.search(r'klaviyo', html, re.I))
     return signals
 
 def detect_tracking_method(html, signals):
     methods = []
-    if signals.get('shopify_detected'):
-        methods.append('Shopify native analytics')
-    if signals.get('ga_direct'):
-        methods.append('Direct GA4 (gtag.js)')
-    if signals.get('has_pixel'):
-        methods.append('Facebook Pixel')
-    if signals.get('has_klaviyo'):
-        methods.append('Klaviyo tracking')
+    if signals.get('shopify_detected'): methods.append('Shopify native analytics')
+    if signals.get('ga_direct'): methods.append('Direct GA4 (gtag.js)')
+    if signals.get('has_pixel'): methods.append('Facebook Pixel')
+    if signals.get('has_klaviyo'): methods.append('Klaviyo tracking')
     return methods
 
-def run_groq_audit(gtm_script, page_signals, url, gtm_id, api_key):
+def run_groq_audit(gtm_script, page_signals, url, gtm_id, api_key, parsed_container=None):
     client = Groq(api_key=api_key)
+
+    real_data_section = ""
+    if parsed_container:
+        tag_list = "\n".join([
+            f"- {t.get('instance_name') or t.get('display_name', 'Unknown')} (type: {t.get('name', '')}, paused: {t.get('paused', False)}, params: {json.dumps(t.get('params', {}))[:200]})"
+            for t in parsed_container.get('tags', [])
+        ])
+        var_list = "\n".join([
+            f"- {v.get('instance_name') or v.get('name', 'Unknown')} (params: {json.dumps(v.get('params', {}))[:150]})"
+            for v in parsed_container.get('variables', [])
+        ])
+        real_data_section = f"""
+REAL PARSED CONTAINER DATA (use these exact names in your response):
+Container version: {parsed_container.get('version', 'unknown')}
+
+ACTUAL TAGS ({len(parsed_container.get('tags', []))} total):
+{tag_list or 'None found'}
+
+ACTUAL VARIABLES ({len(parsed_container.get('variables', []))} total):
+{var_list or 'None found'}
+"""
+
     prompt = f"""You are an expert GTM and GA4 implementation auditor. Analyze the GTM container and page signals below for {url} (Container: {gtm_id}).
 
 {real_data_section}
@@ -272,6 +212,7 @@ Return ONLY a valid JSON object, no markdown, no backticks:
   ],
   "quick_wins": ["Quick win 1", "Quick win 2", "Quick win 3"]
 }}"""
+
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -284,6 +225,7 @@ Return ONLY a valid JSON object, no markdown, no backticks:
         st.error(f"AI analysis failed: {str(e)}")
         return None
 
+
 def render_badge(status):
     colors = {'pass': ('badge-pass', 'Pass'), 'warn': ('badge-warn', 'Warning'), 'fail': ('badge-fail', 'Issue'), 'info': ('badge-info', 'Info')}
     cls, label = colors.get(status, ('badge-info', status.title()))
@@ -293,6 +235,8 @@ def render_priority_badge(priority):
     colors = {'high': 'badge-fail', 'medium': 'badge-warn', 'low': 'badge-pass'}
     return f'<span class="badge {colors.get(priority, "badge-info")}">{priority.title()}</span>'
 
+
+# ── Main ─────────────────────────────────────────────────────
 
 def main():
     # ── Sidebar ──
@@ -347,7 +291,7 @@ def main():
     # ── URL Input ──
     col1, col2 = st.columns([4, 1])
     with col1:
-        url = st.text_input("", placeholder="https://yourwebsite.com", label_visibility="collapsed")
+        url = st.text_input("Website URL", placeholder="https://yourwebsite.com", label_visibility="collapsed")
     with col2:
         analyze = st.button("Audit GTM →")
 
@@ -376,21 +320,26 @@ def main():
 
         if not gtm_ids:
             other_methods = detect_tracking_method(html, signals)
+            detected_html = ""
+            if other_methods:
+                detected_html = "<div style='margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap'>" + \
+                    "".join([f"<div style='background:#f0f6ff;border-radius:980px;padding:8px 16px;font-size:13px;color:#0071e3;font-weight:400'>Detected: {m}</div>" for m in other_methods]) + \
+                    "</div>"
             st.markdown(f"""
             <div style="background:#fff;border-radius:18px;padding:32px;box-shadow:0 2px 12px rgba(0,0,0,0.06);text-align:center;margin-top:8px">
                 <div style="font-size:36px;margin-bottom:14px">🔎</div>
                 <div style="font-size:20px;font-weight:600;color:#1d1d1f;margin-bottom:8px;letter-spacing:-.02em">No GTM container found</div>
                 <div style="font-size:14px;color:#6e6e73;font-weight:300;max-width:480px;margin:0 auto;line-height:1.7">
-                    This website does not appear to be using Google Tag Manager. This is actually common — many sites manage their tracking differently.
+                    This website does not appear to be using Google Tag Manager. This is common — many sites manage their tracking differently.
                 </div>
-                {"<div style='margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap'>" + "".join([f"<div style='background:#f0f6ff;border-radius:980px;padding:8px 16px;font-size:13px;color:#0071e3;font-weight:400'>Detected: {m}</div>" for m in other_methods]) + "</div>" if other_methods else ""}
+                {detected_html}
                 <div style="margin-top:24px;background:#f5f5f7;border-radius:14px;padding:20px 24px;text-align:left">
                     <div style="font-size:12px;font-weight:600;color:#1d1d1f;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Common reasons GTM is not found</div>
                     <div style="font-size:13px;color:#6e6e73;font-weight:300;line-height:2">
                         🛍️ <strong style="color:#1d1d1f;font-weight:500">Shopify native tracking</strong> — Shopify has built-in analytics and many stores use the Shopify pixel instead of GTM<br>
                         📦 <strong style="color:#1d1d1f;font-weight:500">Direct GA4 integration</strong> — Some sites fire GA4 directly via gtag.js without GTM<br>
                         🔒 <strong style="color:#1d1d1f;font-weight:500">Server-side tracking</strong> — Advanced setups where tags fire server-side, invisible in the page source<br>
-                        🧩 <strong style="color:#1d1d1f;font-weight:500">Custom CMS or platform</strong> — Platforms like Webflow, Wix, or Squarespace have their own native integrations<br>
+                        🧩 <strong style="color:#1d1d1f;font-weight:500">Custom CMS or platform</strong> — Platforms like Webflow, Wix or Squarespace have their own native integrations<br>
                         ⚡ <strong style="color:#1d1d1f;font-weight:500">Single Page App</strong> — React or Next.js sites may load GTM dynamically, making it hard to detect
                     </div>
                 </div>
@@ -404,14 +353,13 @@ def main():
             gtm_script = fetch_gtm_script(gtm_id)
             parsed = parse_gtm_container(gtm_script)
 
-        # Show parsed container summary
         if parsed:
             st.markdown(f"""
             <div style="background:#f0f6ff;border-radius:12px;padding:12px 18px;margin-bottom:12px;display:flex;gap:20px;font-size:12px;color:#0071e3;font-weight:400">
                 <span>✓ Container parsed</span>
-                <span>{len(parsed.get('tags',[]))} real tags found</span>
-                <span>{len(parsed.get('variables',[]))} variables found</span>
-                <span>Version {parsed.get('version','?')}</span>
+                <span>{len(parsed.get('tags', []))} real tags found</span>
+                <span>{len(parsed.get('variables', []))} variables found</span>
+                <span>Version {parsed.get('version', '?')}</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -431,7 +379,7 @@ def main():
                 <div style="width:48px;height:48px;background:#f0f6ff;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:16px;color:#0071e3;flex-shrink:0">{domain[:2].upper()}</div>
                 <div style="flex:1">
                     <div style="font-size:18px;font-weight:600;letter-spacing:-.02em;color:#1d1d1f">{domain}</div>
-                    <div style="font-size:13px;color:#86868b;margin-top:2px;font-weight:300">{audit.get('site_summary','')}</div>
+                    <div style="font-size:13px;color:#86868b;margin-top:2px;font-weight:300">{audit.get('site_summary', '')}</div>
                 </div>
                 <div style="text-align:center;flex-shrink:0">
                     <div style="font-size:11px;color:#86868b;font-weight:500;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Container</div>
@@ -464,11 +412,11 @@ def main():
             <div style="background:rgba(255,255,255,.2);width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">G4</div>
             <div style="flex:1">
                 <div style="font-size:15px;font-weight:600;color:#fff;letter-spacing:-.01em">Google Analytics 4</div>
-                <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px;font-weight:300">{ga4.get('note','')}</div>
+                <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px;font-weight:300">{ga4.get('note', '')}</div>
             </div>
             <div style="display:flex;gap:20px;text-align:center">
                 <div><div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.05em">ID</div><div style="font-size:13px;font-weight:500;color:#fff;margin-top:2px">{ga4.get('measurement_id') or 'Not found'}</div></div>
-                <div><div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.05em">Via</div><div style="font-size:13px;font-weight:500;color:#fff;margin-top:2px">{ga4.get('via','Unknown')}</div></div>
+                <div><div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.05em">Via</div><div style="font-size:13px;font-weight:500;color:#fff;margin-top:2px">{ga4.get('via', 'Unknown')}</div></div>
                 <div><div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.05em">Ecommerce</div><div style="font-size:13px;font-weight:500;color:#fff;margin-top:2px">{'Active' if ga4.get('ecommerce') else 'Not found'}</div></div>
                 <div><div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.05em">Consent</div><div style="font-size:13px;font-weight:500;color:#fff;margin-top:2px">{'On' if ga4.get('consent_mode') else 'Off'}</div></div>
             </div>
@@ -503,7 +451,7 @@ def main():
 
         st.markdown(f'<div style="text-align:center;padding:32px 0 8px;font-size:11px;color:#b0b0b5">GTM Auditor — {domain} — Powered by Groq</div>', unsafe_allow_html=True)
 
-    # ── What is GTM explainer (bottom) ──
+    # ── Explainer cards at bottom ──
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px">
@@ -524,6 +472,7 @@ def main():
         </div>
     </div>
     """, unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     main()
